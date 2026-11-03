@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # needed to attach the DMG to a release when pushing a tag
+  contents: write
 
 jobs:
   dmg:
@@ -19,7 +19,6 @@ jobs:
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          # Universal = Apple Silicon + Intel in a single bundle
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - uses: actions/cache@v4
@@ -35,10 +34,12 @@ jobs:
         run: |
           export MACOSX_DEPLOYMENT_TARGET=10.13
           cargo xtask bundle-universal spectral_compressor --release
+          echo "Archivos generados:"
+          ls -la target/bundled
 
       - name: Ad-hoc sign the bundles
         run: |
-          for b in target/bundled/spectral_compressor.vst3 target/bundled/spectral_compressor.clap; do
+          for b in "target/bundled/Spectral Compressor.vst3" "target/bundled/Spectral Compressor.clap"; do
             codesign --force --deep --sign - "$b"
           done
 
@@ -47,18 +48,17 @@ jobs:
           VERSION=$(grep -m1 '^version' plugins/spectral_compressor/Cargo.toml | cut -d'"' -f2)
           STAGE=dmg_stage
           mkdir -p "$STAGE"
-          cp -R target/bundled/spectral_compressor.vst3 "$STAGE/"
-          cp -R target/bundled/spectral_compressor.clap "$STAGE/"
+          cp -R "target/bundled/Spectral Compressor.vst3" "$STAGE/"
+          cp -R "target/bundled/Spectral Compressor.clap" "$STAGE/"
           ln -s "/Library/Audio/Plug-Ins/VST3" "$STAGE/VST3 (arrastrar aqui)"
           ln -s "/Library/Audio/Plug-Ins/CLAP" "$STAGE/CLAP (arrastrar aqui)"
           cat > "$STAGE/LEEME.txt" <<'EOF'
-          Copia spectral_compressor.vst3 a /Library/Audio/Plug-Ins/VST3
-          Copia spectral_compressor.clap a /Library/Audio/Plug-Ins/CLAP
-          (o a las mismas rutas dentro de ~/Library para solo tu usuario).
+          Copia "Spectral Compressor.vst3" a /Library/Audio/Plug-Ins/VST3
+          Copia "Spectral Compressor.clap" a /Library/Audio/Plug-Ins/CLAP
 
           Si macOS dice que el plugin esta danado o no verificado, ejecuta en Terminal:
-            xattr -cr /Library/Audio/Plug-Ins/VST3/spectral_compressor.vst3
-            xattr -cr /Library/Audio/Plug-Ins/CLAP/spectral_compressor.clap
+            xattr -cr "/Library/Audio/Plug-Ins/VST3/Spectral Compressor.vst3"
+            xattr -cr "/Library/Audio/Plug-Ins/CLAP/Spectral Compressor.clap"
           EOF
           hdiutil create -volname "Spectral Compressor $VERSION" \
             -srcfolder "$STAGE" -ov -format UDZO \
