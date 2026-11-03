@@ -1,5 +1,226 @@
+/* Spectral Compressor: pastel blue theme */
+
+/* ---- Layout containers ---- */
+
+.root {
+  background-color: #a6bcdd;
+  child-space: 0px;
+  col-between: 0px;
+}
+
+.left-panel {
+  width: 210px;
+  height: 1s;
+  background-color: #94aed7;
+  child-top: 14px;
+  child-bottom: 10px;
+  child-left: 1s;
+  child-right: 1s;
+  row-between: 6px;
+}
+
+.right-area {
+  width: 1s;
+  height: 1s;
+  child-space: 0px;
+  row-between: 0px;
+}
+
+.main-row {
+  width: 1s;
+  height: 1s;
+  col-between: 0px;
+}
+
+.controls-panel {
+  width: 520px;
+  height: 1s;
+  background-color: #a1b8da;
+  child-top: 16px;
+  child-bottom: 8px;
+  child-left: 1s;
+  child-right: 1s;
+  row-between: 14px;
+}
+
+.compressor-row {
+  width: auto;
+  col-between: 18px;
+}
+
+.section {
+  width: auto;
+  child-left: 1s;
+  child-right: 1s;
+  row-between: 4px;
+}
+
+.section-title {
+  font-size: 22px;
+  color: #1a2a52;
+  left: 1s;
+  right: 1s;
+}
+
+.knob-row {
+  width: auto;
+  col-between: 6px;
+  child-left: 1s;
+  child-right: 1s;
+}
+
+.bottom-bar {
+  width: 1s;
+  background-color: #8aa4d0;
+  child-left: 12px;
+  child-right: 12px;
+  child-top: 1s;
+  child-bottom: 1s;
+  col-between: 12px;
+}
+
+.title-block {
+  child-left: 1s;
+  child-right: 1s;
+}
+
+/* ---- Text ---- */
+
+label {
+  color: #1a2a52;
+  font-size: 13px;
+}
+
+.title {
+  color: #3a4a80;
+  left: 1s;
+  right: 1s;
+}
+
+.title-accent {
+  color: #e9f0ff;
+}
+
+.version {
+  color: #5b6fa6;
+  font-size: 11px;
+  left: 1s;
+  right: 1s;
+}
+
+.knob-stack {
+  child-left: 1s;
+  child-right: 1s;
+}
+
+.knob-label {
+  color: #26376a;
+  font-size: 13px;
+  left: 1s;
+  right: 1s;
+}
+
+.knob-value {
+  color: #1a2a52;
+  font-size: 12px;
+  background-color: #c4d3ec;
+  border-radius: 3px;
+  child-left: 8px;
+  child-right: 8px;
+  child-top: 2px;
+  child-bottom: 2px;
+  left: 1s;
+  right: 1s;
+}
+
+.bar-item {
+  row-between: 2px;
+}
+
+.bar-label {
+  color: #1a2a52;
+  font-size: 11px;
+  left: 4px;
+}
+
+/* ---- Parameter widgets ---- */
+
+param-knob {
+  background-color: transparent;
+}
+
+param-slider {
+  width: 100px;
+  height: 22px;
+  border-width: 0px;
+  border-radius: 11px;
+  background-color: #c4d3ec;
+  transition: background-color 100ms;
+}
+
+param-slider:hover,
+param-slider:active {
+  background-color: #d3dff2;
+  transition: background-color 100ms;
+}
+
+param-slider .fill {
+  background-color: #7f98cc;
+  border-radius: 11px;
+}
+
+param-slider label {
+  color: #1a2a52;
+  font-size: 12px;
+}
+
+param-slider.mode-select {
+  width: 170px;
+  height: 26px;
+  border-radius: 13px;
+}
+
+/* The analyzer toggle, styled after a pill button */
+param-button {
+  height: 24px;
+  width: auto;
+  border-width: 0px;
+  border-radius: 12px;
+  background-color: #c4d3ec;
+  color: #1a2a52;
+  child-left: 12px;
+  child-right: 12px;
+  child-top: 1s;
+  child-bottom: 1s;
+}
+
+param-button:hover {
+  background-color: #d3dff2;
+}
+
+param-button:checked {
+  background-color: #2b2d3d;
+}
+
+param-button:checked label {
+  color: #eef3ff;
+}
+
+/* ---- Analyzer ---- */
+
 analyzer {
-  border-color: #0a0a0a;
+  border-color: #6f86bd;
   border-width: 1px;
-  color: #0a0a0a;
+  /* The spectrum is filled with this color */
+  color: #6a82bc;
+}
+
+.analyzer-label {
+  color: #4a5d94;
+  font-size: 12px;
+  text-align: center;
+}
+
+.analyzer-label-db {
+  text-align: right;
 }
