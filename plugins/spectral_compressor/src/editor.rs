@@ -23,25 +23,40 @@ use nih_plug_vizia::{assets, create_vizia_editor, ViziaState, ViziaTheming};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
-use self::analyzer::Analyzer;
+use self::analyzer::{
+    decibels_to_t, frequency_to_t, Analyzer, GRID_DECIBELS, GRID_FREQUENCIES_HZ,
+    GRID_FREQUENCY_LABELS,
+};
 use self::mode_button::EditorModeButton;
+use self::param_knob::param_knob;
 use crate::analyzer::AnalyzerData;
 use crate::{SpectralCompressor, SpectralCompressorParams};
 
 mod analyzer;
 mod mode_button;
+mod param_knob;
 
-/// The entire GUI's width, in logical pixels.
-const EXPANDED_GUI_WIDTH: u32 = 1360;
-/// The width of the GUI's main part containing the controls.
-const COLLAPSED_GUI_WIDTH: u32 = 680;
+/// The width of the panel on the left with the main controls, in logical pixels.
+const LEFT_PANEL_WIDTH: u32 = 210;
+/// The width of the panel with the threshold curve and compressor controls.
+const CONTROLS_WIDTH: u32 = 520;
+/// The width of the analyzer, including its margins.
+const ANALYZER_WIDTH: u32 = 640;
+/// The height of the bar along the bottom with the global parameters.
+const BOTTOM_BAR_HEIGHT: u32 = 56;
+/// The margin around the analyzer's drawing area, used to place the labels on top of it.
+const ANALYZER_MARGIN: f32 = 10.0;
+
+/// The entire GUI's width when the analyzer is visible, in logical pixels.
+const EXPANDED_GUI_WIDTH: u32 = LEFT_PANEL_WIDTH + CONTROLS_WIDTH + ANALYZER_WIDTH;
+/// The width of the GUI when only the controls are shown.
+const COLLAPSED_GUI_WIDTH: u32 = LEFT_PANEL_WIDTH + CONTROLS_WIDTH;
 /// The entire GUI's height, in logical pixels.
-const GUI_HEIGHT: u32 = 530;
-// I couldn't get `LayoutType::Grid` to work as expected, so we'll fake a 4x4 grid with
-// hardcoded column widths
-const COLUMN_WIDTH: Units = Pixels(330.0);
+const GUI_HEIGHT: u32 = 600;
 
-const DARKER_GRAY: Color = Color::rgb(0x69, 0x69, 0x69);
+/// The size of the analyzer's drawing area.
+const ANALYZER_DRAW_WIDTH: f32 = ANALYZER_WIDTH as f32 - 2.0 * ANALYZER_MARGIN;
+const ANALYZER_DRAW_HEIGHT: f32 = (GUI_HEIGHT - BOTTOM_BAR_HEIGHT) as f32 - 2.0 * ANALYZER_MARGIN;
 
 /// The editor's mode. Essentially just a boolean to indicate whether the analyzer is shown or
 /// not.
@@ -90,160 +105,252 @@ pub(crate) fn create(editor_state: Arc<ViziaState>, editor_data: Data) -> Option
         editor_data.clone().build(cx);
 
         HStack::new(cx, |cx| {
-            main_column(cx);
+            left_panel(cx);
 
-            let analyzer_visible = Data::editor_mode
-                .map(|editor_mode| editor_mode.load() == EditorMode::AnalyzerVisible);
-            Binding::new(cx, analyzer_visible, |cx, analyzer_visible| {
-                if analyzer_visible.get(cx) {
-                    analyzer_column(cx);
-                }
-            });
-        });
+            VStack::new(cx, |cx| {
+                HStack::new(cx, |cx| {
+                    controls_panel(cx);
+
+                    let analyzer_visible = Data::editor_mode
+                        .map(|editor_mode| editor_mode.load() == EditorMode::AnalyzerVisible);
+                    Binding::new(cx, analyzer_visible, |cx, analyzer_visible| {
+                        if analyzer_visible.get(cx) {
+                            analyzer_column(cx);
+                        }
+                    });
+                })
+                .class("main-row");
+
+                bottom_bar(cx);
+            })
+            .class("right-area");
+        })
+        .class("root");
 
         ResizeHandle::new(cx);
     })
 }
 
-fn main_column(cx: &mut Context) {
+/// The panel on the left: the plugin's name, the threshold mode and the most important knobs.
+fn left_panel(cx: &mut Context) {
     VStack::new(cx, |cx| {
-        HStack::new(cx, |cx| {
-            EditorModeButton::new(cx, Data::editor_mode, "Show analyzer")
-                // Makes this align a bit nicer with the plugin name
-                .top(Pixels(2.0))
-                .left(Pixels(2.0));
-
-            HStack::new(cx, |cx| {
-                Label::new(cx, "Spectral Compressor")
-                    .font_family(vec![FamilyOwned::Name(String::from(assets::NOTO_SANS))])
-                    .font_weight(FontWeightKeyword::Thin)
-                    .font_size(30.0)
-                    .on_mouse_down(|_, _| {
-                        // FIXME: On Windows this blocks, and while this is blocking a timer may
-                        //        proc which causes the window state to be mutably borrowed again,
-                        //        resulting in a panic. This needs to be fixed in baseview first.
-                        if cfg!(not(windows)) {
-                            // Try to open the plugin's page when clicking on the title. If this
-                            // fails then that's not a problem
-                            let result = open::that(SpectralCompressor::URL);
-                            if cfg!(debug_assertions) && result.is_err() {
-                                nih_debug_assert_failure!(
-                                    "Failed to open web browser: {:?}",
-                                    result
-                                );
-                            }
+        VStack::new(cx, |cx| {
+            Label::new(cx, "spectral")
+                .font_family(vec![FamilyOwned::Name(String::from(assets::NOTO_SANS))])
+                .font_weight(FontWeightKeyword::Thin)
+                .font_size(34.0)
+                .class("title")
+                .on_mouse_down(|_, _| {
+                    // FIXME: On Windows this blocks, and while this is blocking a timer may
+                    //        proc which causes the window state to be mutably borrowed again,
+                    //        resulting in a panic. This needs to be fixed in baseview first.
+                    if cfg!(not(windows)) {
+                        // Try to open the plugin's page when clicking on the title. If this
+                        // fails then that's not a problem
+                        let result = open::that(SpectralCompressor::URL);
+                        if cfg!(debug_assertions) && result.is_err() {
+                            nih_debug_assert_failure!("Failed to open web browser: {:?}", result);
                         }
-                    });
-                Label::new(cx, SpectralCompressor::VERSION)
-                    .color(DARKER_GRAY)
-                    .top(Stretch(1.0))
-                    .bottom(Pixels(4.0))
-                    .left(Pixels(2.0));
-            })
-            .size(Auto);
+                    }
+                });
+            Label::new(cx, "compressor")
+                .font_family(vec![FamilyOwned::Name(String::from(assets::NOTO_SANS))])
+                .font_weight(FontWeightKeyword::Thin)
+                .font_size(34.0)
+                .class("title")
+                .class("title-accent");
+            Label::new(cx, SpectralCompressor::VERSION).class("version");
         })
-        .height(Pixels(30.0))
-        .right(Pixels(17.0))
-        // Somehow this overrides the 'row-between' value now
-        .bottom(Pixels(8.0))
-        .left(Pixels(10.0))
-        .top(Pixels(10.0))
-        // This contains the editor mode buttom all the way on the left, and the plugin's name all the way on the right
-        .col_between(Stretch(1.0));
+        .class("title-block")
+        .height(Auto)
+        .row_between(Pixels(-4.0));
+
+        ParamSlider::new(cx, Data::params, |params| &params.threshold.mode).class("mode-select");
+
+        param_knob(
+            cx,
+            Data::params,
+            |params| &params.threshold.threshold_db,
+            "threshold",
+            118.0,
+        );
+        param_knob(
+            cx,
+            Data::params,
+            |params| &params.threshold.sc_channel_link,
+            "sc link",
+            66.0,
+        );
 
         HStack::new(cx, |cx| {
-            make_column(cx, "Globals", |cx| {
-                GenericUi::new(cx, Data::params.map(|p| p.global.clone()));
-            });
-
-            make_column(cx, "Threshold", |cx| {
-                GenericUi::new(cx, Data::params.map(|p| p.threshold.clone()));
-
-                Label::new(
-                    cx,
-                    "Parameter ranges and overal gain staging are still subject to change. If you \
-                     use this in a project, make sure to bounce things to audio just in case \
-                     they'll sound different later.",
-                )
-                .text_wrap(true)
-                .font_size(11.0)
-                .left(Pixels(15.0))
-                .right(Pixels(8.0))
-                .width(Stretch(1.0));
-            });
+            param_knob(
+                cx,
+                Data::params,
+                |params| &params.global.compressor_attack_ms,
+                "attack",
+                58.0,
+            );
+            param_knob(
+                cx,
+                Data::params,
+                |params| &params.global.compressor_release_ms,
+                "release",
+                58.0,
+            );
         })
-        .size(Auto);
-
-        HStack::new(cx, |cx| {
-            make_column(cx, "Upwards", |cx| {
-                // We don't want to show the 'Upwards' prefix here, but it should still be in
-                // the parameter name so the parameter list makes sense
-                let upwards_compressor_params = Data::params.map(|p| p.compressors.upwards.clone());
-                GenericUi::new_custom(cx, upwards_compressor_params, |cx, param_ptr| {
-                    HStack::new(cx, |cx| {
-                        Label::new(
-                            cx,
-                            unsafe { param_ptr.name() }
-                                .strip_prefix("Upwards ")
-                                .expect("Expected parameter name prefix, this is a bug"),
-                        )
-                        .class("label");
-
-                        GenericUi::draw_widget(cx, upwards_compressor_params, param_ptr);
-                    })
-                    .class("row");
-                });
-            });
-
-            make_column(cx, "Downwards", |cx| {
-                let downwards_compressor_params =
-                    Data::params.map(|p| p.compressors.downwards.clone());
-                GenericUi::new_custom(cx, downwards_compressor_params, |cx, param_ptr| {
-                    HStack::new(cx, |cx| {
-                        Label::new(
-                            cx,
-                            unsafe { param_ptr.name() }
-                                .strip_prefix("Downwards ")
-                                .expect("Expected parameter name prefix, this is a bug"),
-                        )
-                        .class("label");
-
-                        GenericUi::draw_widget(cx, downwards_compressor_params, param_ptr);
-                    })
-                    .class("row");
-                });
-            });
-        })
-        .size(Auto);
+        .class("knob-row")
+        .height(Auto);
     })
-    .width(Pixels(COLLAPSED_GUI_WIDTH as f32))
-    .row_between(Pixels(10.0))
-    .child_left(Stretch(1.0))
-    .child_right(Stretch(1.0));
+    .class("left-panel");
 }
 
-fn analyzer_column(cx: &mut Context) {
-    Analyzer::new(cx, Data::analyzer_data, Data::sample_rate)
-        // These arbitrary 12 pixels are to align with the analyzer toggle botton
-        .space(Pixels(12.0))
-        .bottom(Pixels(12.0))
-        .left(Pixels(2.0))
-        .top(Pixels(12.0));
+/// The threshold curve knobs and the upwards/downwards compressor knobs.
+fn controls_panel(cx: &mut Context) {
+    VStack::new(cx, |cx| {
+        section(cx, "Threshold curve", |cx| {
+            HStack::new(cx, |cx| {
+                param_knob(
+                    cx,
+                    Data::params,
+                    |params| &params.threshold.center_frequency,
+                    "center",
+                    76.0,
+                );
+                param_knob(
+                    cx,
+                    Data::params,
+                    |params| &params.threshold.curve_slope,
+                    "slope",
+                    76.0,
+                );
+                param_knob(
+                    cx,
+                    Data::params,
+                    |params| &params.threshold.curve_curve,
+                    "curve",
+                    76.0,
+                );
+            })
+            .class("knob-row")
+            .height(Auto);
+        });
+
+        HStack::new(cx, |cx| {
+            section(cx, "Upwards", |cx| {
+                knob_grid(
+                    cx,
+                    Data::params.map(|p| p.compressors.upwards.clone()),
+                );
+            });
+            section(cx, "Downwards", |cx| {
+                knob_grid(
+                    cx,
+                    Data::params.map(|p| p.compressors.downwards.clone()),
+                );
+            });
+        })
+        .class("compressor-row")
+        .height(Auto);
+    })
+    .class("controls-panel");
 }
 
-fn make_column(cx: &mut Context, title: &str, contents: impl FnOnce(&mut Context)) {
+/// A 2x2 grid of the knobs for either the upwards or the downwards compressor.
+fn knob_grid<L>(cx: &mut Context, params: L)
+where
+    L: Lens<Target = Arc<crate::compressor_bank::CompressorParams>> + Copy,
+{
+    HStack::new(cx, |cx| {
+        param_knob(cx, params, |p| &p.threshold_offset_db, "offset", 66.0);
+        param_knob(cx, params, |p| &p.ratio, "ratio", 66.0);
+    })
+    .class("knob-row")
+    .height(Auto);
+    HStack::new(cx, |cx| {
+        param_knob(cx, params, |p| &p.high_freq_ratio_rolloff, "rolloff", 66.0);
+        param_knob(cx, params, |p| &p.knee_width_db, "knee", 66.0);
+    })
+    .class("knob-row")
+    .height(Auto);
+}
+
+/// A titled group of controls.
+fn section(cx: &mut Context, title: &str, contents: impl FnOnce(&mut Context)) {
     VStack::new(cx, |cx| {
         Label::new(cx, title)
             .font_family(vec![FamilyOwned::Name(String::from(assets::NOTO_SANS))])
             .font_weight(FontWeightKeyword::Thin)
-            .font_size(23.0)
-            .left(Stretch(1.0))
-            // This should align nicely with the right edge of the slider
-            .right(Pixels(7.0))
-            .bottom(Pixels(-10.0));
+            .class("section-title");
 
         contents(cx);
     })
-    .width(COLUMN_WIDTH)
+    .class("section")
     .height(Auto);
+}
+
+/// The global parameters along the bottom, together with the button for toggling the analyzer.
+fn bottom_bar(cx: &mut Context) {
+    HStack::new(cx, |cx| {
+        EditorModeButton::new(cx, Data::editor_mode, "analyzer");
+
+        bar_slider(cx, "mix", |cx| {
+            ParamSlider::new(cx, Data::params, |params| &params.global.dry_wet_ratio);
+        });
+        bar_slider(cx, "output", |cx| {
+            ParamSlider::new(cx, Data::params, |params| &params.global.output_gain);
+        });
+        bar_slider(cx, "window", |cx| {
+            ParamSlider::new(cx, Data::params, |params| &params.global.window_size_order);
+        });
+        bar_slider(cx, "overlap", |cx| {
+            ParamSlider::new(cx, Data::params, |params| {
+                &params.global.overlap_times_order
+            });
+        });
+    })
+    .class("bottom-bar")
+    .height(Pixels(BOTTOM_BAR_HEIGHT as f32));
+}
+
+fn bar_slider(cx: &mut Context, label: &str, slider: impl FnOnce(&mut Context)) {
+    VStack::new(cx, |cx| {
+        Label::new(cx, label).class("bar-label");
+        slider(cx);
+    })
+    .class("bar-item")
+    .width(Auto)
+    .height(Auto);
+}
+
+/// The analyzer with the frequency and decibel labels drawn on top of it.
+fn analyzer_column(cx: &mut Context) {
+    ZStack::new(cx, |cx| {
+        Analyzer::new(cx, Data::analyzer_data, Data::sample_rate).space(Pixels(ANALYZER_MARGIN));
+
+        // The analyzer's size is fixed in logical pixels so these can be placed absolutely
+        for (frequency, label) in GRID_FREQUENCIES_HZ.iter().zip(GRID_FREQUENCY_LABELS) {
+            let x = ANALYZER_MARGIN + ANALYZER_DRAW_WIDTH * frequency_to_t(*frequency);
+            Label::new(cx, label)
+                .class("analyzer-label")
+                .position_type(PositionType::SelfDirected)
+                .left(Pixels(x - 20.0))
+                .top(Pixels(ANALYZER_MARGIN + 4.0))
+                .width(Pixels(40.0))
+                .hoverable(false);
+        }
+
+        for db in GRID_DECIBELS {
+            let y = ANALYZER_MARGIN + ANALYZER_DRAW_HEIGHT * (1.0 - decibels_to_t(db));
+            Label::new(cx, &format!("{db:.0}"))
+                .class("analyzer-label")
+                .class("analyzer-label-db")
+                .position_type(PositionType::SelfDirected)
+                .left(Pixels(ANALYZER_MARGIN + ANALYZER_DRAW_WIDTH - 44.0))
+                .top(Pixels(y - 16.0))
+                .width(Pixels(40.0))
+                .hoverable(false);
+        }
+    })
+    .width(Pixels(ANALYZER_WIDTH as f32))
+    .height(Stretch(1.0));
 }
