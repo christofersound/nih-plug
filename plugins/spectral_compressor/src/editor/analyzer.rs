@@ -40,14 +40,36 @@ const LN_FREQ_RANGE: f32 = LN_FREQ_RANGE_END_HZ - LN_FREQ_RANGE_START_HZ;
 ///
 /// This is drawn using some blending options that make it interact differently with darker
 /// backgrounds.
-const GR_BAR_OVERLAY_COLOR: vg::Color = vg::Color::rgbaf(0.85, 0.95, 1.0, 0.8);
+const GR_BAR_OVERLAY_COLOR: vg::Color = vg::Color::rgbaf(1.0, 1.0, 1.0, 0.26);
 
 /// The color used for drawing the downwards compression threshold curve. Looks somewhat similar to
 /// `GR_BAR_OVERLAY_COLOR` when factoring in the blending.
-const DOWNWARDS_THRESHOLD_CURVE_COLOR: vg::Color = vg::Color::rgbaf(0.45, 0.55, 0.6, 0.9);
+const DOWNWARDS_THRESHOLD_CURVE_COLOR: vg::Color = vg::Color::rgbaf(1.0, 1.0, 1.0, 0.95);
 /// The color used for drawing the upwards compression threshold curve. Slightly color to make to
 /// make the output look less confusing.
-const UPWARDS_THRESHOLD_CURVE_COLOR: vg::Color = vg::Color::rgbaf(0.55, 0.70, 0.65, 0.9);
+const UPWARDS_THRESHOLD_CURVE_COLOR: vg::Color = vg::Color::rgbaf(0.86, 0.93, 1.0, 0.65);
+
+/// The analyzer's 'sky', drawn as a vertical gradient behind everything else.
+const BACKGROUND_COLOR_TOP: vg::Color = vg::Color::rgbaf(0.627, 0.722, 0.855, 1.0);
+const BACKGROUND_COLOR_BOTTOM: vg::Color = vg::Color::rgbaf(0.725, 0.800, 0.902, 1.0);
+/// The faint lines marking octaves and decibel steps.
+const GRID_COLOR: vg::Color = vg::Color::rgbaf(1.0, 1.0, 1.0, 0.20);
+/// The frequencies with a vertical grid line (and a label drawn by the editor).
+pub const GRID_FREQUENCIES_HZ: [f32; 7] = [100.0, 250.0, 500.0, 1_000.0, 2_000.0, 4_000.0, 8_000.0];
+pub const GRID_FREQUENCY_LABELS: [&str; 7] = ["100", "250", "500", "1k", "2k", "4k", "8k"];
+/// The decibel values with a horizontal grid line.
+pub const GRID_DECIBELS: [f32; 4] = [-60.0, -40.0, -20.0, 0.0];
+
+/// Maps a frequency in Hz to the `[0, 1]` x-position it's drawn at. Used by the editor to place the
+/// labels over the analyzer.
+pub fn frequency_to_t(frequency_hz: f32) -> f32 {
+    (frequency_hz.ln() - LN_FREQ_RANGE_START_HZ) / LN_FREQ_RANGE
+}
+
+/// Maps a decibel value to the `[0, 1]` height (from the bottom) it's drawn at.
+pub fn decibels_to_t(db: f32) -> f32 {
+    db_to_unclamped_t(db)
+}
 
 /// A very analyzer showing the envelope followers as a magnitude spectrum with an overlay for the
 /// gain reduction.
@@ -95,6 +117,7 @@ impl View for Analyzer {
         let analyzer_data = analyzer_data.read();
         let nyquist = self.sample_rate.load(Ordering::Relaxed) / 2.0;
 
+        draw_background(cx, canvas);
         draw_spectrum(cx, canvas, analyzer_data, nyquist);
         draw_threshold_curve(cx, canvas, analyzer_data);
         draw_gain_reduction(cx, canvas, analyzer_data, nyquist);
@@ -120,6 +143,41 @@ impl View for Analyzer {
         let paint = vg::Paint::color(border_color).with_line_width(border_width);
         canvas.stroke_path(&path, &paint);
     }
+}
+
+/// Draws the background gradient and the grid lines.
+fn draw_background(cx: &mut DrawContext, canvas: &mut Canvas) {
+    let bounds = cx.bounds();
+
+    let mut background = vg::Path::new();
+    background.rect(bounds.x, bounds.y, bounds.w, bounds.h);
+    canvas.fill_path(
+        &background,
+        &vg::Paint::linear_gradient(
+            bounds.x,
+            bounds.y,
+            bounds.x,
+            bounds.y + bounds.h,
+            BACKGROUND_COLOR_TOP,
+            BACKGROUND_COLOR_BOTTOM,
+        ),
+    );
+
+    let mut grid = vg::Path::new();
+    for frequency in GRID_FREQUENCIES_HZ {
+        let x = (bounds.x + bounds.w * frequency_to_t(frequency)).round() + 0.5;
+        grid.move_to(x, bounds.y);
+        grid.line_to(x, bounds.y + bounds.h);
+    }
+    for db in GRID_DECIBELS {
+        let y = (bounds.y + bounds.h * (1.0 - db_to_unclamped_t(db))).round() + 0.5;
+        grid.move_to(bounds.x, y);
+        grid.line_to(bounds.x + bounds.w, y);
+    }
+    canvas.stroke_path(
+        &grid,
+        &vg::Paint::color(GRID_COLOR).with_line_width(cx.scale_factor().max(1.0)),
+    );
 }
 
 /// Compute an unclamped value based on a decibel value -80 and is mapped to 0, +20 is mapped to 1,
@@ -316,7 +374,7 @@ fn draw_gain_reduction(
     let bounds = cx.bounds();
 
     // As with the above, anti aliasing only causes issues
-    let paint = vg::Paint::color(GR_BAR_OVERLAY_COLOR).with_anti_alias(false);
+    let paint = vg::Paint::color(GR_BAR_OVERLAY_COLOR);
 
     let bin_frequency = |bin_idx: f32| (bin_idx / analyzer_data.num_bins as f32) * nyquist_hz;
 
@@ -368,8 +426,5 @@ fn draw_gain_reduction(
         path.close();
     }
 
-    canvas
-        .global_composite_blend_func(vg::BlendFactor::DstAlpha, vg::BlendFactor::OneMinusDstColor);
     canvas.fill_path(&path, &paint);
-    canvas.global_composite_blend_func(vg::BlendFactor::One, vg::BlendFactor::OneMinusSrcAlpha);
 }
