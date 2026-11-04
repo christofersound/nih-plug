@@ -135,7 +135,7 @@ pub(crate) fn create(editor_state: Arc<ViziaState>, editor_data: Data) -> Option
 fn left_panel(cx: &mut Context) {
     VStack::new(cx, |cx| {
         VStack::new(cx, |cx| {
-            Label::new(cx, "spectral")
+            Label::new(cx, "ezpectral")
                 .font_family(vec![FamilyOwned::Name(String::from(assets::NOTO_SANS))])
                 .font_weight(FontWeightKeyword::Thin)
                 .font_size(34.0)
@@ -153,7 +153,7 @@ fn left_panel(cx: &mut Context) {
                         }
                     }
                 });
-            Label::new(cx, "compressor")
+            Label::new(cx, "comp")
                 .font_family(vec![FamilyOwned::Name(String::from(assets::NOTO_SANS))])
                 .font_weight(FontWeightKeyword::Thin)
                 .font_size(34.0)
