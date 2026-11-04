@@ -282,8 +282,8 @@ impl SpectralCompressorParams {
 }
 
 impl Plugin for SpectralCompressor {
-    const NAME: &'static str = "Spectral Compressor";
-    const VENDOR: &'static str = "Robbert van der Helm";
+    const NAME: &'static str = "Ezpectral Comp";
+    const VENDOR: &'static str = "NoTempo";
     const URL: &'static str = env!("CARGO_PKG_HOMEPAGE");
     const EMAIL: &'static str = "mail@robbertvanderhelm.nl";
 
@@ -620,7 +620,7 @@ fn process_stft_sidechain(
 }
 
 impl ClapPlugin for SpectralCompressor {
-    const CLAP_ID: &'static str = "nl.robbertvanderhelm.spectral-compressor";
+    const CLAP_ID: &'static str = "com.notempo.ezpectral-comp";
     const CLAP_DESCRIPTION: Option<&'static str> = Some("Turn things into pink noise on demand");
     const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
@@ -636,7 +636,7 @@ impl ClapPlugin for SpectralCompressor {
 }
 
 impl Vst3Plugin for SpectralCompressor {
-    const VST3_CLASS_ID: [u8; 16] = *b"SpectrlComprRvdH";
+    const VST3_CLASS_ID: [u8; 16] = *b"NoTempoEzpComp01";
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
         Vst3SubCategory::Fx,
         Vst3SubCategory::Dynamics,
