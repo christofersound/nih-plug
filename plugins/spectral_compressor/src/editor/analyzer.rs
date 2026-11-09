@@ -44,10 +44,10 @@ const GR_BAR_OVERLAY_COLOR: vg::Color = vg::Color::rgbaf(0.85, 0.95, 1.0, 0.8);
 
 /// The color used for drawing the downwards compression threshold curve. Looks somewhat similar to
 /// `GR_BAR_OVERLAY_COLOR` when factoring in the blending.
-const DOWNWARDS_THRESHOLD_CURVE_COLOR: vg::Color = vg::Color::rgbaf(0.45, 0.55, 0.6, 0.9);
+const DOWNWARDS_THRESHOLD_CURVE_COLOR: vg::Color = vg::Color::rgbaf(0.39, 0.82, 1.0, 0.9);
 /// The color used for drawing the upwards compression threshold curve. Slightly color to make to
 /// make the output look less confusing.
-const UPWARDS_THRESHOLD_CURVE_COLOR: vg::Color = vg::Color::rgbaf(0.55, 0.70, 0.65, 0.9);
+const UPWARDS_THRESHOLD_CURVE_COLOR: vg::Color = vg::Color::rgbaf(0.75, 0.35, 0.95, 0.9);
 
 /// A very analyzer showing the envelope followers as a magnitude spectrum with an overlay for the
 /// gain reduction.

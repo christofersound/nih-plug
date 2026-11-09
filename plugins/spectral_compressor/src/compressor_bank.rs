@@ -20,6 +20,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::analyzer::AnalyzerData;
+use crate::bands::BandWeights;
 use crate::curve::{Curve, CurveParams};
 use crate::SpectralCompressorParams;
 
@@ -67,6 +68,9 @@ pub struct CompressorBank {
     /// For each compressor bin, `ln(freq)` where `freq` is the frequency associated with that
     /// compressor. This is precomputed since all update functions need it.
     ln_freqs: Vec<f32>,
+
+    /// Per-bin scaling factors from the five focus bands. See `crate::bands`.
+    band_weights: BandWeights,
 
     /// Downwards compressor thresholds, in decibels.
     downwards_thresholds_db: Vec<f32>,
@@ -443,6 +447,8 @@ impl CompressorBank {
 
             ln_freqs: Vec::with_capacity(complex_buffer_len),
 
+            band_weights: BandWeights::new(complex_buffer_len),
+
             downwards_thresholds_db: Vec::with_capacity(complex_buffer_len),
             downwards_ratios: Vec::with_capacity(complex_buffer_len),
             downwards_knee_parabola_scale: Vec::with_capacity(complex_buffer_len),
@@ -523,6 +529,8 @@ impl CompressorBank {
             let freq = (i as f32 / window_size as f32) * buffer_config.sample_rate;
             *ln_freq = freq.ln();
         }
+
+        self.band_weights.resize(complex_buffer_len);
 
         self.downwards_thresholds_db.resize(complex_buffer_len, 1.0);
         self.downwards_ratios.resize(complex_buffer_len, 1.0);
@@ -607,6 +615,9 @@ impl CompressorBank {
         }
 
         self.update_if_needed(params);
+        if channel_idx == 0 {
+            self.band_weights.update(&params.bands, &self.ln_freqs);
+        }
         match params.threshold.mode.value() {
             ThresholdMode::Internal => {
                 self.update_envelopes(buffer, channel_idx, params, overlap_times);
@@ -624,6 +635,13 @@ impl CompressorBank {
                 self.compress(buffer, channel_idx, params, first_non_dc_bin)
             }
         };
+
+        // When a band's listen button is on, everything outside of that band is muted
+        if self.band_weights.any_listen {
+            for (bin, mask) in buffer.iter_mut().zip(self.band_weights.listen_mask.iter()) {
+                *bin *= *mask;
+            }
+        }
 
         // When processing the last channel we can finalize the spectrum analyzer data and send it
         // to the editor for display
@@ -849,6 +867,8 @@ impl CompressorBank {
 
         assert!(analyzer_input_data.gain_difference_db.len() >= buffer.len());
         assert!(self.downwards_thresholds_db.len() == buffer.len());
+        assert!(self.band_weights.down_scale.len() == buffer.len());
+        assert!(self.band_weights.up_scale.len() == buffer.len());
         assert!(self.downwards_ratios.len() == buffer.len());
         assert!(self.downwards_knee_parabola_scale.len() == buffer.len());
         assert!(self.downwards_knee_parabola_intercept.len() == buffer.len());
@@ -912,8 +932,13 @@ impl CompressorBank {
 
             // If the comprssed output is -10 dBFS and the envelope follower was at -6 dBFS, then we
             // want to apply -4 dB of gain to the bin
-            let gain_difference_db =
-                downwards_compressed + upwards_compressed - (envelope_db * 2.0);
+            // The focus bands scale the downwards and upwards parts individually. Both scales are
+            // 1.0 with the default band settings, which gives the original formula
+            // `downwards_compressed + upwards_compressed - (envelope_db * 2.0)`.
+            let band_down_scale = unsafe { *self.band_weights.down_scale.get_unchecked(bin_idx) };
+            let band_up_scale = unsafe { *self.band_weights.up_scale.get_unchecked(bin_idx) };
+            let gain_difference_db = (downwards_compressed - envelope_db) * band_down_scale
+                + (upwards_compressed - envelope_db) * band_up_scale;
             unsafe {
                 *analyzer_input_data
                     .gain_difference_db
@@ -952,6 +977,8 @@ impl CompressorBank {
         assert!(analyzer_input_data.gain_difference_db.len() >= buffer.len());
         assert!(self.sidechain_spectrum_magnitudes[channel_idx].len() == buffer.len());
         assert!(self.downwards_thresholds_db.len() == buffer.len());
+        assert!(self.band_weights.down_scale.len() == buffer.len());
+        assert!(self.band_weights.up_scale.len() == buffer.len());
         assert!(self.downwards_ratios.len() == buffer.len());
         assert!(self.upwards_thresholds_db.len() == buffer.len());
         assert!(self.upwards_ratios.len() == buffer.len());
@@ -1032,8 +1059,13 @@ impl CompressorBank {
 
             // If the comprssed output is -10 dBFS and the envelope follower was at -6 dBFS, then we
             // want to apply -4 dB of gain to the bin
-            let gain_difference_db =
-                downwards_compressed + upwards_compressed - (envelope_db * 2.0);
+            // The focus bands scale the downwards and upwards parts individually. Both scales are
+            // 1.0 with the default band settings, which gives the original formula
+            // `downwards_compressed + upwards_compressed - (envelope_db * 2.0)`.
+            let band_down_scale = unsafe { *self.band_weights.down_scale.get_unchecked(bin_idx) };
+            let band_up_scale = unsafe { *self.band_weights.up_scale.get_unchecked(bin_idx) };
+            let gain_difference_db = (downwards_compressed - envelope_db) * band_down_scale
+                + (upwards_compressed - envelope_db) * band_up_scale;
             unsafe {
                 *analyzer_input_data
                     .gain_difference_db

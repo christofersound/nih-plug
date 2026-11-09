@@ -1,4 +1,4 @@
-// Spectral Compressor: an FFT based compressor
+// Sound Digger (by NoTempo): five band spectral compressor, based on Spectral Compressor
 // Copyright (C) 2021-2024 Robbert van der Helm
 //
 // This program is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@ use std::sync::{Arc, Mutex};
 use triple_buffer::TripleBuffer;
 
 mod analyzer;
+mod bands;
 mod compressor_bank;
 mod curve;
 mod dry_wet_mixer;
@@ -112,6 +113,9 @@ pub struct SpectralCompressorParams {
     /// Parameters controlling the compressor thresholds and curves.
     #[nested(group = "threshold")]
     pub threshold: Arc<compressor_bank::ThresholdParams>,
+    /// The five focus bands, each scaling how the compressors act in its part of the spectrum.
+    #[nested(group = "bands")]
+    pub bands: Arc<bands::BandsParams>,
     /// Parameters for the upwards and downwards compressors.
     #[nested(group = "compressors")]
     pub compressors: compressor_bank::CompressorBankParams,
@@ -276,16 +280,17 @@ impl SpectralCompressorParams {
             global: Arc::new(GlobalParams::default()),
 
             threshold: Arc::new(compressor_bank::ThresholdParams::new(compressor_bank)),
+            bands: Arc::new(bands::BandsParams::default()),
             compressors: compressor_bank::CompressorBankParams::new(compressor_bank),
         }
     }
 }
 
 impl Plugin for SpectralCompressor {
-    const NAME: &'static str = "Spectral Compressor";
-    const VENDOR: &'static str = "Robbert van der Helm";
+    const NAME: &'static str = "Sound Digger (by NoTempo)";
+    const VENDOR: &'static str = "NoTempo";
     const URL: &'static str = env!("CARGO_PKG_HOMEPAGE");
-    const EMAIL: &'static str = "mail@robbertvanderhelm.nl";
+    const EMAIL: &'static str = "";
 
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -620,8 +625,9 @@ fn process_stft_sidechain(
 }
 
 impl ClapPlugin for SpectralCompressor {
-    const CLAP_ID: &'static str = "nl.robbertvanderhelm.spectral-compressor";
-    const CLAP_DESCRIPTION: Option<&'static str> = Some("Turn things into pink noise on demand");
+    const CLAP_ID: &'static str = "com.notempo.sound-digger";
+    const CLAP_DESCRIPTION: Option<&'static str> =
+        Some("Spectral compressor with five focus bands");
     const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
     const CLAP_FEATURES: &'static [ClapFeature] = &[
@@ -636,7 +642,7 @@ impl ClapPlugin for SpectralCompressor {
 }
 
 impl Vst3Plugin for SpectralCompressor {
-    const VST3_CLASS_ID: [u8; 16] = *b"SpectrlComprRvdH";
+    const VST3_CLASS_ID: [u8; 16] = *b"SoundDiggerNoTmp";
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
         Vst3SubCategory::Fx,
         Vst3SubCategory::Dynamics,

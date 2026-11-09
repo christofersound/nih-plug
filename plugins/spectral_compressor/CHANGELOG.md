@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-11-09
+
+Sound Digger (by NoTempo), a fork of Spectral Compressor.
+
+### Added
+
+- Five focus bands. Each band has on/off, freq, sens, q, balance, shape and
+  listen controls. With the default `sens` (100%) and `balance` (even) the
+  plugin behaves like Spectral Compressor 0.4.3.
+- A dark, Apple-style theme.
+
+### Changed
+
+- The plugin is now called Sound Digger (by NoTempo) and has its own VST3 class
+  ID and CLAP ID, so it can be installed next to Spectral Compressor.
+- The install script puts the plugin in a `NoTempo` folder.
+- Clicking the plugin name no longer opens a web page.
+
 ## [0.4.3] - 2023-03-31
 
 ### Changed
