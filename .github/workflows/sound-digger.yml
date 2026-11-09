@@ -1,0 +1,41 @@
+name: Build Sound Digger
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "plugins/spectral_compressor/**"
+      - "bundler.toml"
+      - ".github/workflows/sound-digger.yml"
+
+jobs:
+  macos:
+    name: macOS (Apple Silicon + Intel)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build universal bundles
+        run: cargo xtask bundle-universal sound_digger --release
+
+      - name: Sign and put the plugins in NoTempo folders
+        run: |
+          NAME="Sound Digger (by NoTempo)"
+          mkdir -p "dist/VST3/NoTempo" "dist/CLAP/NoTempo"
+          cp -R "target/bundled/$NAME.vst3" "dist/VST3/NoTempo/"
+          cp -R "target/bundled/$NAME.clap" "dist/CLAP/NoTempo/"
+          codesign --force --deep --sign - "dist/VST3/NoTempo/$NAME.vst3"
+          codesign --force --deep --sign - "dist/CLAP/NoTempo/$NAME.clap"
+          tar -czf sound-digger-macos.tar.gz -C dist .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sound-digger-macos
+          path: sound-digger-macos.tar.gz
