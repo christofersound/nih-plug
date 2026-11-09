@@ -28,5 +28,5 @@ name = "Puberty Simulator"
 [safety_limiter]
 name = "Safety Limiter"
 
-[spectral_compressor]
-name = "Spectral Compressor"
+[sound_digger]
+name = "Sound Digger (by NoTempo)"
